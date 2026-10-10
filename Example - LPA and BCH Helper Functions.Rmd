@@ -1,0 +1,138 @@
+---
+title: "LPA and BCH Analysis with tidySEM: Helper Functions Example"
+author: "Alicia S.C. Lee"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+<br>**Run the source code exactly as it is.**
+
+```{r}
+source("LPA_BCH_HelperFunctions.R")
+```
+
+## 1. Simulate data
+
+<br>**Set seed to ensure replicability.**
+<br>
+
+```{r}
+set.seed(12345)
+```
+
+<br>**This example uses simulated data, so it runs without any real data.**
+<br>**Replace the simulation chunk and change the variable names.**
+<br>
+
+```{r}
+n <- 600
+true_class <- sample(1:3, n, replace = TRUE, prob = c(.5, .3, .2))
+
+centres <- rbind(c(-1, -1, -1),   # profile 1: low on everything
+                 c( 1,  1,  1),   # profile 2: high on everything
+                 c( 1, -1,  0))   # profile 3: mixed
+
+dat <- data.frame(
+  x1 = rnorm(n, centres[true_class, 1], .6),
+  x2 = rnorm(n, centres[true_class, 2], .6),
+  x3 = rnorm(n, centres[true_class, 3], .6)
+)
+dat$outcome_a <- rnorm(n, c(0, .8, -.5)[true_class])
+dat$outcome_b <- rnorm(n, c(.3, -.3, .6)[true_class])
+```
+
+<br>**Assign your dataset to dat so that the codes will run.**
+<br>
+```{r}
+#dat <- df1
+
+# Standardise the indicators
+indicators <- c("x1", "x2", "x3")
+dat[indicators] <- scale(dat[indicators])
+```
+
+
+## 2. Fit the LPA models
+
+<br>**Please note that this chunk of code can take hours to run, depending on the number of participants in your dataset.**
+<br>**Using 'cache_file` saves the fitted models so that you don't have to refit them during knitting.**
+<br>**The lpa function has been set to run EEI and VVI models only.**
+<br>
+
+```{r}
+profiles <- run_lpa(
+  data       = dat,
+  indicators = indicators,
+  classes    = 1:4,
+  variances  = c("equal", "varying"),
+  cache_file = "lpa_models_example.rds"
+)
+
+fit_table(profiles)
+```
+
+<br>**Based on the results, you will have to choose the model that makes the most sense.**
+
+## 3. Inspect the chosen solution
+
+```{r}
+chosen_profile <- profiles[["equal var 3"]]
+
+class_sizes(chosen_profile)
+avg_posterior(chosen_profile)
+extract_profile_means(chosen_profile)
+```
+
+<br>**Look at the means, then name your profiles, instead of using "Profile A", "Profile B" etc.**
+<br>**The names must match the class order shown above (`class1`, `class2`, ...).**
+<br>**Replace "Indicator 1", "Indicator 2" etc. with your actual variable names.**
+<br>**If your chosen solution has more than 3 classes, add "class4 = ..." in profile_labels.**
+
+```{r}
+profile_labels <- c(
+  class1 = "Profile A",
+  class2 = "Profile B",
+  class3 = "Profile C"
+)
+
+plot_lpa_profiles(chosen_profile,
+                  type           = "line",
+                  profile_labels = profile_labels,
+                  var_labels     = c(x1 = "Indicator 1", x2 = "Indicator 2", x3 = "Indicator 3"),
+                  y_label        = "Standardised mean")
+```
+
+## 4. BCH: distal outcomes
+
+<br>**This is the code to run all steps for one outcome at once.**
+<br>**Replace outcome_a with the name of your auxiliary variable.**
+<br>
+
+```{r}
+res_a <- bch_full(chosen_profile, dat$outcome_a, "Outcome A",
+                  N = nrow(dat), profile_labels = profile_labels)
+```
+
+<br>**This is the code to run the BCH analysis step by step.**
+<br>**Again, replace outcome_b with the name of your auxiliary variable.**
+<br>**I have include codes to compute pairwise comparisons and effect sizes.**
+
+```{r}
+bch_b <- run_bch(chosen_profile, dat$outcome_b, "Outcome B", profile_labels)
+bch_omnibus(bch_b, N = nrow(dat), "Outcome B")
+bch_pairwise(bch_b, profile_labels, "Outcome B")
+bch_effect_sizes(bch_b, class_sizes(chosen_profile), profile_labels, "Outcome B")
+```
+
+<br>**Use the code below to plot relevant outcomes together.**
+
+```{r}
+plot_bch_outcomes(list(res_a$bch, bch_b), profile_labels = profile_labels)
+
+# Black-and-white version for print (needs ggpattern)
+# plot_bch_outcomes(list(res_a$bch, bch_b), profile_labels = profile_labels, style = "pattern")
+```
